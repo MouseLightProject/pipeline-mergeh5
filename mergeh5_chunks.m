@@ -19,7 +19,9 @@ function mergeh5_chunks(configfile,iiC,jjC,kkC,numchunk)
 % Copyright: HHMI 2016
 setmask=0;
 if nargin<1
-    configfile = './config_files/20150619_config_mergeh5.cfg'
+    configfile = './config_files/20170810_prob1_config_mergeh5.cfg'
+elseif nargin==1
+    
 elseif nargin ==5
     iiC = str2double(iiC);
     jjC = str2double(jjC);
@@ -36,6 +38,18 @@ if isfield(opt,'nl')
     opt.level=opt.nl-1;
 else
     error('No level was found')
+end
+if isfield(opt,'numCPU')
+    numCPU = opt.numCPU;
+else
+    numCPU = feature('numcores');
+end
+poolobj = gcp('nocreate'); % If no pool, do not create new one.
+if isempty(poolobj)
+    poolsize = 0;
+    parpool(numCPU)
+else
+    poolsize = poolobj.NumWorkers
 end
 %%
 % set block size to a fraction of image size to maximize speed
@@ -232,14 +246,15 @@ else
     theseinds = idxiijjkk(:)';
     telapsed = zeros(1,length(theseinds));
     %Itempsub = cell(1,length(theseinds));
-    Itempsub = cell(1,12);
+    Itempsub = cell(1,numCPU);
     
-    iters = 0:12:length(theseinds);
+    iters = 0:numCPU:length(theseinds);
     kk=length(iters)-1;
     for ii=1:kk
         sprintf('%d out of %d',ii,kk)
+        ticparread = tic;
         % read in paralel
-        parfor idx = 1:12%length(theseinds)
+        parfor idx = 1:numCPU%length(theseinds)
             if strcmp(fileext,'.h5')
                 data = single(h5read(myfiles{iters(ii)+idx},['/',info.Datasets.Name]));
                 data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
@@ -250,9 +265,10 @@ else
             %st = RR(theseinds(idx),1:3)-bbox(1:3);
             Itempsub{idx} = data;
         end
+        elapseread = toc(ticparread);
         %%
         %%% write sequential
-        for idx = 1:12
+        for idx = 1:numCPU
             % write into big file
             st = RR(iters(ii)+idx,1:3);
             data = Itempsub{idx};
@@ -261,6 +277,9 @@ else
             ttoc = round(toc(tstart));
             telapsed(iters(ii)+idx) = ttoc;
         end
+        sprintf('block idx: %d / %d, R: %d, W: %d, maxW: %f',ii,kk,round(elapseread),...
+            round(sum(telapsed(iters(ii)+1:iters(ii)+numCPU))),max(telapsed(iters(ii)+1:iters(ii)+numCPU)))
+
     end
     %%
     for idx = iters(end)+1: length(theseinds)
