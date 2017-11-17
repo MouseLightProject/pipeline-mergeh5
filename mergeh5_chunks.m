@@ -19,7 +19,7 @@ function mergeh5_chunks(configfile,iiC,jjC,kkC,numchunk)
 % Copyright: HHMI 2016
 setmask=0;
 if nargin<1
-    configfile = './config_files/20170810_prob1_config_mergeh5.cfg'
+    configfile = './config_files/20170925_prob0_config_mergeh5.cfg'
 elseif nargin==1
     
 elseif nargin ==5
@@ -32,6 +32,11 @@ if ~isdeployed
     addpath(genpath('./common'))
 end
 opt = configparser(configfile);
+
+optTransform = configparser(fullfile(opt.inputfolder,'transform.txt'));
+for thesefields = {'ox','oy','oz','sx','sy','sz','nl'}
+    opt.(thesefields{1}) = optTransform.(thesefields{1});
+end
 
 % if isfield(opt,'level')
 if isfield(opt,'nl')
@@ -246,15 +251,17 @@ else
     theseinds = idxiijjkk(:)';
     telapsed = zeros(1,length(theseinds));
     %Itempsub = cell(1,length(theseinds));
-    Itempsub = cell(1,numCPU);
+    numBatch = 4*numCPU;
+    Itempsub = cell(1,numBatch);
     
-    iters = 0:numCPU:length(theseinds);
+    iters = 0:numBatch:length(theseinds);
     kk=length(iters)-1;
     for ii=1:kk
+        %%
         sprintf('%d out of %d',ii,kk)
         ticparread = tic;
         % read in paralel
-        parfor idx = 1:numCPU%length(theseinds)
+        parfor idx = 1:numBatch%length(theseinds)
             if strcmp(fileext,'.h5')
                 data = single(h5read(myfiles{iters(ii)+idx},['/',info.Datasets.Name]));
                 data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
@@ -266,22 +273,22 @@ else
             Itempsub{idx} = data;
         end
         elapseread = toc(ticparread);
-        %%
+
         %%% write sequential
-        for idx = 1:numCPU
+        for idx = 1:numBatch
             % write into big file
             st = RR(iters(ii)+idx,1:3);
             data = Itempsub{idx};
             tstart = tic;
             h5write(myouth5,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
-            ttoc = round(toc(tstart));
+            ttoc = (toc(tstart));
             telapsed(iters(ii)+idx) = ttoc;
         end
+        
         sprintf('block idx: %d / %d, R: %d, W: %d, maxW: %f',ii,kk,round(elapseread),...
-            round(sum(telapsed(iters(ii)+1:iters(ii)+numCPU))),max(telapsed(iters(ii)+1:iters(ii)+numCPU)))
-
+            round(sum(telapsed(iters(ii)+1:iters(ii)+numBatch))),max(telapsed(iters(ii)+1:iters(ii)+numBatch)))
     end
-    %%
+    
     for idx = iters(end)+1: length(theseinds)
         % write into big file
         st = RR(idx,1:3);

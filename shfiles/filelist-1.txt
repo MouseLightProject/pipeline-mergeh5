@@ -1,0 +1,8 @@
+/nrs/mouselight/SAMPLES/2017-09-25/1/default.0.tif
+/nrs/mouselight/SAMPLES/2017-09-25/2/default.0.tif
+/nrs/mouselight/SAMPLES/2017-09-25/3/default.0.tif
+/nrs/mouselight/SAMPLES/2017-09-25/4/default.0.tif
+/nrs/mouselight/SAMPLES/2017-09-25/5/default.0.tif
+/nrs/mouselight/SAMPLES/2017-09-25/6/default.0.tif
+/nrs/mouselight/SAMPLES/2017-09-25/7/default.0.tif
+/nrs/mouselight/SAMPLES/2017-09-25/8/default.0.tif
