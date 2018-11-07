@@ -1,3 +1,5 @@
 *.m~
 *.tif
 *.tiff
+*.txt
+*.sh

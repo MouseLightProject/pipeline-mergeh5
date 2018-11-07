@@ -1,1 +1,0 @@
-bsub -n1 -We 1 -J t-0-00001 -o /dev/null '/groups/mousebrainmicro/home/base/anaconda3/envs/syglass/bin/python /groups/mousebrainmicro/mousebrainmicro/Software/syGlassConverter/singleThreadedCacher.py  /nrs/mouselight/SAMPLES/2017-09-25/ /nrs/mouselight/SAMPLES/2017-09-25/syglass/'

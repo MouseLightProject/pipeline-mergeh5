@@ -19,7 +19,7 @@ function mergeh5_chunks(configfile,iiC,jjC,kkC,numchunk)
 % Copyright: HHMI 2016
 setmask=0;
 if nargin<1
-    configfile = './config_files/20170925_prob0_config_mergeh5.cfg'
+    configfile = '/groups/mousebrainmicro/home/base/CODE/MATLAB/pipeline/mergeh5/config_files/20181001_prob0_config_mergeh5.cfg'
 elseif nargin==1
     
 elseif nargin ==5
@@ -32,6 +32,15 @@ if ~isdeployed
     addpath(genpath('./common'))
 end
 opt = configparser(configfile);
+% inputfolder = '/nrs/mouselight/Users/mluser/2018-05-23-prob'
+% # output h5 name
+% outname = '/scratch/classifierOutputs/2018-04-13/20180413_prob0/20180413_prob0'
+% # filelist sequence
+% seqtemp = '/scratch/classifierOutputs/2018-04-13/20180413_prob0/20180413_prob0-seq0.txt'
+% # copy scratch to /nrs/mouselight/cluster/classifierOutputs/2018-04-13/20180413_prob0
+if isfield(opt,'')
+end
+
 
 optTransform = configparser(fullfile(opt.inputfolder,'transform.txt'));
 for thesefields = {'ox','oy','oz','sx','sy','sz','nl'}
@@ -82,10 +91,6 @@ else
     end
     outsiz = opt.imgsiz*2^(opt.level);
 end
-% if any(opt.imgsiz~=whd)
-%     opt.imgsiz = whd;
-%     warning(sprintf('tile size set to [%d %d %d]',opt.imgsiz))
-% end
 %%
 % get sequence
 args.level = opt.level;
@@ -93,8 +98,11 @@ args.ext = opt.ext;
 if exist(opt.seqtemp, 'file') == 2
     % load file directly
 else
+    sprintf('OUPUT: %s',fileparts(opt.seqtemp))
     mkdir(fileparts(opt.seqtemp))
     args.fid = fopen(opt.seqtemp,'w');
+    opt.inputfolder
+    args
     recdir(opt.inputfolder,args)
 end
 fid=fopen(opt.seqtemp,'r');
@@ -305,6 +313,10 @@ else
         telapsed(idx) = ttoc;
     end
 end
+% copy output to target location
+
+% delete the scratch location
+
 %%
 if opt.viz
     figure,

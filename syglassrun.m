@@ -1,6 +1,7 @@
-sample = '2017-09-25';
+sample = '2018-07-02-raw_new';
+addpath(genpath('./common'))
 samplepath = fullfile('/nrs/mouselight/SAMPLES/',sample);
-outfolder = fullfile(samplepath,'syglass');
+outfolder = fullfile(samplepath,'syglass-ch0');
 
 opt = configparser(fullfile(samplepath,'/transform.txt'));
 args.level = opt.nl-1;
@@ -9,7 +10,7 @@ clear opt
 pythonpath = '/groups/mousebrainmicro/home/base/anaconda3/envs/syglass/bin/python';
 
 for level=0:6
-    mysh = sprintf('./shfiles/syglassrun-%d.sh',level);
+    mysh = sprintf('./shfiles/syglassrun-%d-ch0.sh',level);
     args.level=level;
     args.ext = '0.tif';
     opt.seqtemp = fullfile('./shfiles',sprintf('filelist-%d.txt',level));
