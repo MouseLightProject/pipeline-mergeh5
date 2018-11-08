@@ -1,10 +1,8 @@
-Can be used to create a single h5 file from a rendered probability image. This is needed to run segmentation. 
-
 # Usage: 
 mergeh5_chunks(configfile)  
 
 # Inputs:  
-configfile:  a txt file that has all the parameters used in conversion  
+**configfile:**  txt file that has all the parameters used in conversion  
 ## Fields:  
 **inputfolder:** input render folder that has the h5 octree  
 **outname:** fullpath of output h5  
