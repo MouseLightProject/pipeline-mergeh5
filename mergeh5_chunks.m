@@ -19,7 +19,7 @@ function mergeh5_chunks(configfile,iiC,jjC,kkC,numchunk)
 % Copyright: HHMI 2016
 setmask=0;
 if nargin<1
-    configfile = '/groups/mousebrainmicro/home/base/CODE/MATLAB/pipeline/mergeh5/config_files/20181001_prob0_config_mergeh5.cfg'
+    configfile = '/groups/mousebrainmicro/home/base/CODE/MATLAB/pipeline/mergeh5/config_files/20180815_prob0_config_mergeh5.cfg'
 elseif nargin==1
     
 elseif nargin ==5
@@ -38,9 +38,6 @@ opt = configparser(configfile);
 % # filelist sequence
 % seqtemp = '/scratch/classifierOutputs/2018-04-13/20180413_prob0/20180413_prob0-seq0.txt'
 % # copy scratch to /nrs/mouselight/cluster/classifierOutputs/2018-04-13/20180413_prob0
-if isfield(opt,'')
-end
-
 
 optTransform = configparser(fullfile(opt.inputfolder,'transform.txt'));
 for thesefields = {'ox','oy','oz','sx','sy','sz','nl'}
