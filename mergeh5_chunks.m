@@ -20,6 +20,7 @@ function mergeh5_chunks(configfile,iiC,jjC,kkC,numchunk)
 setmask=0;
 if nargin<1
     configfile = '/groups/mousebrainmicro/home/base/CODE/MATLAB/pipeline/mergeh5/config_files/20180815_prob0_config_mergeh5.cfg'
+    configfile = './config_files/20180815_prob0_config_mergeh5.cfg'
 elseif nargin==1
     
 elseif nargin ==5
@@ -65,29 +66,25 @@ end
 %%
 % set block size to a fraction of image size to maximize speed
 [~,~,fileext] = fileparts(opt.ext);
+% leaf image stack size
 if strcmp(fileext,'.h5')
     myh5 = dir(fullfile(opt.inputfolder,'*.h5'));
     info = h5info(fullfile(opt.inputfolder,myh5(1).name));
     imgsiz = info.Datasets.Dataspace.Size;
-    opt.imgsiz = imgsiz;
-    blocksize = imgsiz/2;
-    while any(blocksize>[128 128 128])
-        div = blocksize>[128 128 128];
-        blocksize = blocksize./(div+1);
-    end
-    outsiz = opt.imgsiz*2^(opt.level);
 else
-    mytif = dir(fullfile(opt.inputfolder,'*.tif'));
+    mytif = dir(fullfile(opt.inputfolder,'default.0.tif'));
     info = imfinfo(fullfile(opt.inputfolder,mytif(1).name), 'tif');
     imgsiz = double([info(1).Width info(1).Height length(info)]);
-    opt.imgsiz = imgsiz;
-    blocksize = imgsiz/2;
-    while any(blocksize>[128 128 128])
-        div = blocksize>[128 128 128];
-        blocksize = blocksize./(div+1);
-    end
-    outsiz = opt.imgsiz*2^(opt.level);
 end
+
+opt.imgsiz = imgsiz;
+blocksize = imgsiz/2;
+while any(blocksize>[128 128 128])
+    div = blocksize>[128 128 128];
+    blocksize = blocksize./(div+1);
+end
+outsiz = opt.imgsiz*2^(opt.level);
+
 %%
 % get sequence
 args.level = opt.level;
@@ -226,11 +223,12 @@ if 0
         end
     end
 else
+    %%
     myouth5 = sprintf('%s_lev-%d_chunk-%d%d%d_%d%d%d_masked-%d.h5',opt.outname,opt.level,1,1,1,1,1,1,setmask);
     
     %myouth5 = sprintf('/data/lev-%d_chunk-%d%d%d_%d%d%d.h5',opt.level,ii,jj,kk,numchunk,numchunk,numchunk);
     mkdir(fileparts(myouth5))
-    h5create(myouth5,myh5prob,outsiz,'Datatype','single','ChunkSize',blocksize,'Deflate',1)
+    h5create(myouth5,myh5prob,outsiz,'Datatype','single','ChunkSize',blocksize,'Deflate',3)
     h5create(myouth5,[myh5prob,'_props/origin'], [1 3]);
     h5create(myouth5,[myh5prob,'_props/spacing'], [1 3]);
     h5create(myouth5,[myh5prob,'_props/level'], [1]);
@@ -271,14 +269,17 @@ else
                 data = single(h5read(myfiles{iters(ii)+idx},['/',info.Datasets.Name]));
                 data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
             else
-                data = permute(single(deployedtiffread(myfiles{theseinds(idx)})),[2 1 3]);
-                data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
+                data = permute(single(deployedtiffread(myfiles{iters(ii)+idx})),[2 1 3]);
+                data = (data+1).*single(data>opt.maskThr);
+                data(~data) = opt.maskThr;
+                data = data/256-1;
+                data = uint8(data);
             end
             %st = RR(theseinds(idx),1:3)-bbox(1:3);
             Itempsub{idx} = data;
         end
         elapseread = toc(ticparread);
-
+        %%
         %%% write sequential
         for idx = 1:numBatch
             % write into big file
@@ -302,7 +303,10 @@ else
             data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
         else
             data = permute(single(deployedtiffread(myfiles{theseinds(idx)})),[2 1 3]);
-            data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
+            data = (data+1).*single(data>opt.maskThr);
+            data(~data) = opt.maskThr;
+            data = data/256-1;
+            data = uint8(data);
         end
         tstart = tic;
         h5write(myouth5,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
@@ -328,7 +332,7 @@ end
 
 end
 function deployment
-% mcc -m -R -nojvm -v mergeh5_chunks.m -d /groups/mousebrainmicro/home/base/CODE/MATLAB/compiledfunctions/mergeh5_chunks -a ./common
+% mcc -m -R -nojvm -v mergeh5_chunks.m -d /groups/mousebrainmicro/home/base/CODE/MATLAB/compiledfunctions/mergeh5_chunks_unix -a ./common
 %
 mergeh5_chunks('/groups/mousebrainmicro/home/base/CODE/MATLAB/recontree/config_files/20150619_config_mergeh5.cfg','1','1','1','8')
 
