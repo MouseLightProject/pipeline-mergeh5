@@ -71,6 +71,9 @@ if strcmp(fileext,'.h5')
     myh5 = dir(fullfile(opt.inputfolder,'*.h5'));
     info = h5info(fullfile(opt.inputfolder,myh5(1).name));
     imgsiz = info.Datasets.Dataspace.Size;
+    if length(imgsiz)>3 ,
+        imgsiz = imgsiz(end-2:end) ;  
+    end
 else
     mytif = dir(fullfile(opt.inputfolder,'default.0.tif'));
     info = imfinfo(fullfile(opt.inputfolder,mytif(1).name), 'tif');
@@ -227,7 +230,13 @@ else
     myouth5 = sprintf('%s_lev-%d_chunk-%d%d%d_%d%d%d_masked-%d.h5',opt.outname,opt.level,1,1,1,1,1,1,setmask);
     
     %myouth5 = sprintf('/data/lev-%d_chunk-%d%d%d_%d%d%d.h5',opt.level,ii,jj,kk,numchunk,numchunk,numchunk);
-    mkdir(fileparts(myouth5))
+    myouth5_parent_folder_path = fileparts(myouth5) ;
+    if ~exist(myouth5_parent_folder_path, 'file') ,
+        mkdir(fileparts(myouth5))
+    end
+    if exist(myouth5, 'file') ,
+        error('Target file %s already exists', myouth5) ;
+    end
     h5create(myouth5,myh5prob,outsiz,'Datatype','single','ChunkSize',blocksize,'Deflate',3)
     h5create(myouth5,[myh5prob,'_props/origin'], [1 3]);
     h5create(myouth5,[myh5prob,'_props/spacing'], [1 3]);
@@ -268,6 +277,11 @@ else
             if strcmp(fileext,'.h5')
                 data = single(h5read(myfiles{iters(ii)+idx},['/',info.Datasets.Name]));
                 data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
+                if ndims(data)>3 ,
+                    original_size = size(data) ;
+                    new_size = original_size(end-2:end) ;
+                    data = reshape(data, new_size) ;  
+                end
             else
                 data = permute(single(deployedtiffread(myfiles{iters(ii)+idx})),[2 1 3]);
                 data = (data+1).*single(data>opt.maskThr);
