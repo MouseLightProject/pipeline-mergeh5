@@ -315,6 +315,11 @@ else
         if strcmp(fileext,'.h5')
             data = single(h5read(myfiles{idx},['/',info.Datasets.Name]));
             data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
+            if ndims(data)>3 ,
+                original_size = size(data) ;
+                new_size = original_size(end-2:end) ;
+                data = reshape(data, new_size) ;
+            end                
         else
             data = permute(single(deployedtiffread(myfiles{theseinds(idx)})),[2 1 3]);
             data = (data+1).*single(data>opt.maskThr);
@@ -344,7 +349,9 @@ if opt.viz
     %%
 end
 
-end
+end  % main function
+
+
 function deployment
 % mcc -m -R -nojvm -v mergeh5_chunks.m -d /groups/mousebrainmicro/home/base/CODE/MATLAB/compiledfunctions/mergeh5_chunks_unix -a ./common
 %
