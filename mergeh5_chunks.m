@@ -1,4 +1,4 @@
-function mergeh5_chunks(configfile,iiC,jjC,kkC,numchunk)
+function mergeh5_chunks(configuration_file_name)
 %MERGEH5 Creates multiple h5 files from multiple small tif/h5s. For tifs,
 %provide parent folder in octree, for h5s provide envelop folder. Output is
 %8 bit so make sure that threshold and parameters are set properly.
@@ -18,21 +18,21 @@ function mergeh5_chunks(configfile,iiC,jjC,kkC,numchunk)
 % $Author: base $	$Date: 2016/05/16 17:25:20 $	$Revision: 0.1 $
 % Copyright: HHMI 2016
 setmask=0;
-if nargin<1
-    configfile = '/groups/mousebrainmicro/home/base/CODE/MATLAB/pipeline/mergeh5/config_files/20180815_prob0_config_mergeh5.cfg'
-    configfile = './config_files/20180815_prob0_config_mergeh5.cfg'
-elseif nargin==1
-    
-elseif nargin ==5
-    iiC = str2double(iiC);
-    jjC = str2double(jjC);
-    kkC = str2double(kkC);
-    numchunk = str2double(numchunk);
-end
+% if nargin<1
+%     configfile = '/groups/mousebrainmicro/home/base/CODE/MATLAB/pipeline/mergeh5/config_files/20180815_prob0_config_mergeh5.cfg'
+%     configfile = './config_files/20180815_prob0_config_mergeh5.cfg'
+% elseif nargin==1
+%     
+% elseif nargin ==5
+%     iiC = str2double(iiC);
+%     jjC = str2double(jjC);
+%     kkC = str2double(kkC);
+%     numchunk = str2double(numchunk);
+% end
 if ~isdeployed
     addpath(genpath('./common'))
 end
-opt = configparser(configfile);
+opt = configparser(configuration_file_name);
 % inputfolder = '/nrs/mouselight/Users/mluser/2018-05-23-prob'
 % # output h5 name
 % outname = '/scratch/classifierOutputs/2018-04-13/20180413_prob0/20180413_prob0'
