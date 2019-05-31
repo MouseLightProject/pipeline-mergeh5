@@ -20,15 +20,17 @@ function mergeh5_chunks(configuration_file_name)
 
     % Read the configuration file, break out the things in it
     opt = configparser(configuration_file_name);
-    input_folder_name = opt.inputfolder ;
+    input_folder_path = opt.input_folder_path ;
     %nl = opt.nl ;
     if isfield(opt,'numCPU')
         core_count_requested = opt.numCPU;
     else
         core_count_requested = feature('numcores');
     end
-    output_file_name = opt.outname ;
-    input_file_names_list_file_path = opt.seqtemp ;
+    output_folder_path = opt.output_folder_path ;
+    sample_date = opt.sample_date ;
+    output_file_name = fullfile(output_folder_path, sprintf('%s-whole-brain-p-map.h5', sample_date)) ;
+    input_file_names_list_file_path = fullfile(output_folder_path, sprintf('%s-input-file-paths-cache.txt', sample_date)) ;
     h5_dataset_name = opt.h5channel ;
     input_file_name_ending = opt.ext ;
     mask_threshold = opt.maskThr ;
@@ -41,7 +43,7 @@ function mergeh5_chunks(configuration_file_name)
     % seqtemp = '/scratch/classifierOutputs/2018-04-13/20180413_prob0/20180413_prob0-seq0.txt'
     % # copy scratch to /nrs/mouselight/cluster/classifierOutputs/2018-04-13/20180413_prob0
 
-    optTransform = configparser(fullfile(input_folder_name, 'transform.txt'));
+    optTransform = configparser(fullfile(input_folder_path, 'transform.txt'));
     ox = optTransform.ox ;
     oy = optTransform.oy ;
     oz = optTransform.oz ;
@@ -67,15 +69,15 @@ function mergeh5_chunks(configuration_file_name)
     [~,~,fileext] = fileparts(input_file_name_ending);
     % leaf image stack size
     if strcmp(fileext,'.h5')
-        myh5 = dir(fullfile(input_folder_name,'*.h5'));
-        info = h5info(fullfile(input_folder_name,myh5(1).name));
+        myh5 = dir(fullfile(input_folder_path,'*.h5'));
+        info = h5info(fullfile(input_folder_path,myh5(1).name));
         imgsiz = info.Datasets.Dataspace.Size;
         if length(imgsiz)>3 ,
             imgsiz = imgsiz(end-2:end) ;  
         end
     else
-        mytif = dir(fullfile(input_folder_name,'default.0.tif'));
-        info = imfinfo(fullfile(input_folder_name,mytif(1).name), 'tif');
+        mytif = dir(fullfile(input_folder_path,'default.0.tif'));
+        info = imfinfo(fullfile(input_folder_path,mytif(1).name), 'tif');
         imgsiz = double([info(1).Width info(1).Height length(info)]);
     end
 
@@ -87,6 +89,11 @@ function mergeh5_chunks(configuration_file_name)
     end
     outsiz = imgsiz*2^(level);
 
+    
+    if ~exist(output_folder_path, 'file') ,
+        mkdir(output_folder_path) ;
+    end
+    
     %%
     % get sequence
     args = struct() ;
@@ -99,7 +106,7 @@ function mergeh5_chunks(configuration_file_name)
             mkdir(parent_folder_path) ;
         end
         args.fid = fopen(input_file_names_list_file_path, 'w') ;
-        recdir(input_folder_name,args)
+        recdir(input_folder_path,args)
     end
     fid=fopen(input_file_names_list_file_path,'r');
     myfiles_raw = textscan(fid,'%s');
@@ -143,10 +150,6 @@ function mergeh5_chunks(configuration_file_name)
     %output_file_name = sprintf('%s_lev-%d_chunk-%d%d%d_%d%d%d_masked-%d.h5',output_folder_name,level,1,1,1,1,1,1,0);
 
     %myouth5 = sprintf('/data/lev-%d_chunk-%d%d%d_%d%d%d.h5',level,ii,jj,kk,numchunk,numchunk,numchunk);
-    myouth5_parent_folder_path = fileparts(output_file_name) ;
-    if ~exist(myouth5_parent_folder_path, 'file') ,
-        mkdir(fileparts(output_file_name))
-    end
     if exist(output_file_name, 'file') ,
         error('Target file %s already exists', output_file_name) ;
     end
