@@ -1,252 +1,165 @@
 function mergeh5_chunks(configuration_file_name)
-%MERGEH5 Creates multiple h5 files from multiple small tif/h5s. For tifs,
-%provide parent folder in octree, for h5s provide envelop folder. Output is
-%8 bit so make sure that threshold and parameters are set properly.
-%
-% [OUTPUTARGS] = MERGEH5(INPUTARGS)
-%
-% Inputs:
-%
-% Outputs:
-%
-% Examples:
-%
-% Provide sample usage code here
-%
-% See also: List related files here
+    %MERGEH5 Creates multiple h5 files from multiple small tif/h5s. For tifs,
+    %provide parent folder in octree, for h5s provide envelop folder. Output is
+    %8 bit so make sure that threshold and parameters are set properly.
+    %
+    % [OUTPUTARGS] = MERGEH5(INPUTARGS)
+    %
+    % Inputs:
+    %
+    % Outputs:
+    %
+    % Examples:
+    %
+    % Provide sample usage code here
+    %
+    % See also: List related files here
 
-% $Author: base $	$Date: 2016/05/16 17:25:20 $	$Revision: 0.1 $
-% Copyright: HHMI 2016
-setmask=0;
-% if nargin<1
-%     configfile = '/groups/mousebrainmicro/home/base/CODE/MATLAB/pipeline/mergeh5/config_files/20180815_prob0_config_mergeh5.cfg'
-%     configfile = './config_files/20180815_prob0_config_mergeh5.cfg'
-% elseif nargin==1
-%     
-% elseif nargin ==5
-%     iiC = str2double(iiC);
-%     jjC = str2double(jjC);
-%     kkC = str2double(kkC);
-%     numchunk = str2double(numchunk);
-% end
-if ~isdeployed
-    addpath(genpath('./common'))
-end
-opt = configparser(configuration_file_name);
-% inputfolder = '/nrs/mouselight/Users/mluser/2018-05-23-prob'
-% # output h5 name
-% outname = '/scratch/classifierOutputs/2018-04-13/20180413_prob0/20180413_prob0'
-% # filelist sequence
-% seqtemp = '/scratch/classifierOutputs/2018-04-13/20180413_prob0/20180413_prob0-seq0.txt'
-% # copy scratch to /nrs/mouselight/cluster/classifierOutputs/2018-04-13/20180413_prob0
+    % $Author: base $	$Date: 2016/05/16 17:25:20 $	$Revision: 0.1 $
+    % Copyright: HHMI 2016
 
-optTransform = configparser(fullfile(opt.inputfolder,'transform.txt'));
-for thesefields = {'ox','oy','oz','sx','sy','sz','nl'}
-    opt.(thesefields{1}) = optTransform.(thesefields{1});
-end
-
-% if isfield(opt,'level')
-if isfield(opt,'nl')
-    opt.level=opt.nl-1;
-else
-    error('No level was found')
-end
-if isfield(opt,'numCPU')
-    numCPU = opt.numCPU;
-else
-    numCPU = feature('numcores');
-end
-poolobj = gcp('nocreate'); % If no pool, do not create new one.
-if isempty(poolobj)
-    poolsize = 0;
-    parpool(numCPU)
-else
-    poolsize = poolobj.NumWorkers
-end
-%%
-% set block size to a fraction of image size to maximize speed
-[~,~,fileext] = fileparts(opt.ext);
-% leaf image stack size
-if strcmp(fileext,'.h5')
-    myh5 = dir(fullfile(opt.inputfolder,'*.h5'));
-    info = h5info(fullfile(opt.inputfolder,myh5(1).name));
-    imgsiz = info.Datasets.Dataspace.Size;
-    if length(imgsiz)>3 ,
-        imgsiz = imgsiz(end-2:end) ;  
+    % Read the configuration file, break out the things in it
+    opt = configparser(configuration_file_name);
+    input_folder_name = opt.inputfolder ;
+    %nl = opt.nl ;
+    if isfield(opt,'numCPU')
+        core_count_requested = opt.numCPU;
+    else
+        core_count_requested = feature('numcores');
     end
-else
-    mytif = dir(fullfile(opt.inputfolder,'default.0.tif'));
-    info = imfinfo(fullfile(opt.inputfolder,mytif(1).name), 'tif');
-    imgsiz = double([info(1).Width info(1).Height length(info)]);
-end
+    output_file_name = opt.outname ;
+    input_file_names_list_file_path = opt.seqtemp ;
+    h5_dataset_name = opt.h5channel ;
+    input_file_name_ending = opt.ext ;
+    mask_threshold = opt.maskThr ;
+    do_visualize = opt.viz ;
 
-opt.imgsiz = imgsiz;
-blocksize = imgsiz/2;
-while any(blocksize>[128 128 128])
-    div = blocksize>[128 128 128];
-    blocksize = blocksize./(div+1);
-end
-outsiz = opt.imgsiz*2^(opt.level);
+    % inputfolder = '/nrs/mouselight/Users/mluser/2018-05-23-prob'
+    % # output h5 name
+    % outname = '/scratch/classifierOutputs/2018-04-13/20180413_prob0/20180413_prob0'
+    % # filelist sequence
+    % seqtemp = '/scratch/classifierOutputs/2018-04-13/20180413_prob0/20180413_prob0-seq0.txt'
+    % # copy scratch to /nrs/mouselight/cluster/classifierOutputs/2018-04-13/20180413_prob0
 
-%%
-% get sequence
-args.level = opt.level;
-args.ext = opt.ext;
-if exist(opt.seqtemp, 'file') == 2
-    % load file directly
-else
-    sprintf('OUPUT: %s',fileparts(opt.seqtemp))
-    mkdir(fileparts(opt.seqtemp))
-    args.fid = fopen(opt.seqtemp,'w');
-    opt.inputfolder
-    args
-    recdir(opt.inputfolder,args)
-end
-fid=fopen(opt.seqtemp,'r');
-myfiles = textscan(fid,'%s');
-myfiles = myfiles{1};
-fclose(fid);
-%%
-RR = zeros(size(myfiles,1),6);
-SS = zeros(size(myfiles,1),3);
-parfor idx=1:size(myfiles,1)
+    optTransform = configparser(fullfile(input_folder_name, 'transform.txt'));
+    ox = optTransform.ox ;
+    oy = optTransform.oy ;
+    oz = optTransform.oz ;
+    sx = optTransform.sx ;
+    sy = optTransform.sy ;
+    sz = optTransform.sz ;
+    nl = optTransform.nl ;
+    
+%     % for thesefields = {'ox','oy','oz','sx','sy','sz','nl'}
+%     %     (thesefields{1}) = optTransform.(thesefields{1});
+%     % end
+
+    level = nl-1 ;
+    poolobj = gcp('nocreate'); % If no pool, do not create new one.
+    if isempty(poolobj)
+        %poolsize = 0;
+        parpool([1 core_count_requested])
+    else
+        %poolsize = poolobj.NumWorkers
+    end
     %%
-    tmps = strsplit(myfiles{idx},filesep);
-    seq = [tmps{end-opt.level:end-1}];
-    idxtile = str2num(seq);
-    lenseq = ceil(log10(idxtile));
-    st = [0 0 0];
-    bin = opt.imgsiz'*2.^[lenseq-1:-1:0];
-    indxyz = zeros(lenseq,3);
-    for iseq = 1:lenseq
-        is = seq(iseq);
-        temp = fliplr(dec2bin(str2num(is)-1,3)); % coordinates wrto xyz
-        for ii=1:3 % x y z
-            indxyz(iseq,ii) = str2num(temp(ii));
-            st(ii) = st(ii) + bin(ii,iseq)*indxyz(iseq,ii);
+    % set block size to a fraction of image size to maximize speed
+    [~,~,fileext] = fileparts(input_file_name_ending);
+    % leaf image stack size
+    if strcmp(fileext,'.h5')
+        myh5 = dir(fullfile(input_folder_name,'*.h5'));
+        info = h5info(fullfile(input_folder_name,myh5(1).name));
+        imgsiz = info.Datasets.Dataspace.Size;
+        if length(imgsiz)>3 ,
+            imgsiz = imgsiz(end-2:end) ;  
         end
+    else
+        mytif = dir(fullfile(input_folder_name,'default.0.tif'));
+        info = imfinfo(fullfile(input_folder_name,mytif(1).name), 'tif');
+        imgsiz = double([info(1).Width info(1).Height length(info)]);
     end
-    RR(idx,:)=[st st+opt.imgsiz];
-    SS(idx,:) = [rem(floor(idxtile/10^(opt.level-1)),10) rem(floor(idxtile/10^(opt.level-2)),10) rem(floor(idxtile/10^(opt.level-3)),10)];
-end
-%% mask a region based on an given swc
-if setmask
-    swcfolder = '/groups/mousebrainmicro/home/base/CODE/MATLAB/pipeline/mergeh5/sampleswcs/'
-    [carvedinds,H3] = carvedInds(swcfolder,RR,opt);
-    myfiles = myfiles(carvedinds);
-    RR = RR(carvedinds,:);
-    SS = SS(carvedinds,:);
-end
-%%
-myh5prob =sprintf('/%s',opt.h5channel);
-%% go 3 level deep
-if 0
-    numchunk = 8;
-    for ii=1:numchunk
-        for jj=1:numchunk
-            for kk=1:numchunk
-                %%
-                myouth5 = sprintf('%s_lev-%d_chunk-%d%d%d_%d%d%d.h5',opt.outname,opt.level,ii,jj,kk,numchunk,numchunk,numchunk);
-                %myouth5 = sprintf('/data/lev-%d_chunk-%d%d%d_%d%d%d.h5',opt.level,ii,jj,kk,numchunk,numchunk,numchunk);
-                mkdir(fileparts(myouth5))
-                h5create(myouth5,myh5prob,outsiz,'Datatype','single','ChunkSize',blocksize,'Deflate',1)
-                h5create(myouth5,[myh5prob,'_props/origin'], [1 3]);
-                h5create(myouth5,[myh5prob,'_props/spacing'], [1 3]);
-                h5create(myouth5,[myh5prob,'_props/level'], [1]);
-                %h5create(myouth5,[myh5prob,'_props/ROI'], size(RR));
-                
-                h5create(myouth5,[myh5prob,'_props/telapsed'], size(RR,1));
-                h5write(myouth5,[myh5prob,'_props/origin'], [opt.ox opt.oy opt.oz]);
-                h5write(myouth5,[myh5prob,'_props/spacing'], [opt.sx opt.sy opt.sz]);
-                h5write(myouth5,[myh5prob,'_props/level'], [opt.nl-1]);
-                % h5write(myouth5,[myh5prob,'_props/ROI'], RR);, only write
-                % where the data is copied
-                %%
-                idxiijjkk = find(SS(:,1)==ii&SS(:,2)==jj&SS(:,3)==kk);
-                if isempty(idxiijjkk)
-                    continue
-                end
-                h5create(myouth5,[myh5prob,'_props/ROI'], size(RR(idxiijjkk,:)));
-                h5write(myouth5,[myh5prob,'_props/ROI'], RR(idxiijjkk,:));
-                h5create(myouth5,[myh5prob,'_props/ROISS'], size(SS(idxiijjkk,:)));
-                h5write(myouth5,[myh5prob,'_props/ROISS'], SS(idxiijjkk,:));
-                % read all
-                %% parread()
-                theseinds = idxiijjkk(:)';
-                Itempsub = cell(1,length(theseinds));
-                parfor idx = 1:length(theseinds)
-                    if strcmp(fileext,'.h5')
-                        data = single(h5read(myfiles{theseinds(idx)},['/',info.Datasets.Name]));
-                        data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
-                    else
-                        data = permute(single(deployedtiffread(myfiles{theseinds(idx)})),[2 1 3]);
-                        data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
-                    end
-                    %st = RR(theseinds(idx),1:3)-bbox(1:3);
-                    Itempsub{idx} = data;
-                end
-                %%
-                telapsed = zeros(1,length(theseinds));
-                for idx = 1:length(theseinds)
-                    % write into big file
-                    st = RR(theseinds(idx),1:3);
-                    data = Itempsub{idx};
-                    tstart = tic;
-                    h5write(myouth5,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
-                    ttoc = round(toc(tstart));
-                    telapsed(idx) = ttoc;
-                    %         disp(sprintf('Elapsed time: %dsecs / Working on %d out of %d / St: [%d %d %d]',ttoc,idx,size(myfiles,1),st(1),st(2),st(3)))
-                end
-                %%
-                if 0
-                    %%
-                    rr = RR(idxiijjkk,:);
-                    bbox = [min(rr(:,1:3)) max(rr(:,4:6))]
-                    tmpsize = bbox(4:6)-bbox(1:3);
-                    Itemp = zeros(tmpsize(1),tmpsize(2),tmpsize(3),'uint8');
-                    for idx = 1:length(theseinds)
-                        st = RR(theseinds(idx),1:3)-bbox(1:3);
-                        Itemp(st(1)+1:st(1)+opt.imgsiz(1),...
-                            st(2)+1:st(2)+opt.imgsiz(2),...
-                            st(3)+1:st(3)+opt.imgsiz(3)) = Itempsub{idx};
-                    end
-                    %%
-                    myh5prob =sprintf('/%s',opt.h5channel);
-                    myouth5 = sprintf('/data/chunk.h5');
-                    
-                    h5create(myouth5,myh5prob,outsiz,'Datatype','single','ChunkSize',blocksize,'Deflate',1)
-                    tic
-                    h5write(myouth5,myh5prob,Itemp,bbox(1:3)+[1 1 1],size(Itemp),[1 1 1])
-                    sprintf('write chunk in %f',toc)
-                    
-                end
-                %%
-                
+
+    %imgsiz = imgsiz;
+    blocksize = imgsiz/2;
+    while any(blocksize>[128 128 128])
+        div = blocksize>[128 128 128];
+        blocksize = blocksize./(div+1);
+    end
+    outsiz = imgsiz*2^(level);
+
+    %%
+    % get sequence
+    args = struct() ;
+    args.level = level;
+    args.ext = input_file_name_ending;
+    if ~exist(input_file_names_list_file_path, 'file') ,
+        fprintf('Creating file: %s\n',input_file_names_list_file_path) ;
+        parent_folder_path = fileparts(input_file_names_list_file_path) ;
+        if ~exist(parent_folder_path, 'file') ,
+            mkdir(parent_folder_path) ;
+        end
+        args.fid = fopen(input_file_names_list_file_path, 'w') ;
+        recdir(input_folder_name,args)
+    end
+    fid=fopen(input_file_names_list_file_path,'r');
+    myfiles_raw = textscan(fid,'%s');
+    myfiles = myfiles_raw{1};
+    fclose(fid);
+    %%
+    RR = zeros(size(myfiles,1),6);
+    %SS = zeros(size(myfiles,1),3);
+    parfor idx=1:size(myfiles,1)
+        %%
+        tmps = strsplit(myfiles{idx},filesep);
+        seq = [tmps{end-level:end-1}];
+        idxtile = str2num(seq);  %#ok<ST2NM>
+        lenseq = ceil(log10(idxtile));
+        st = [0 0 0];
+        bin = imgsiz'*2.^(lenseq-1:-1:0);
+        indxyz = zeros(lenseq,3);
+        for iseq = 1:lenseq
+            is = seq(iseq);
+            temp = fliplr(dec2bin(str2num(is)-1,3)); %#ok<ST2NM>  % coordinates wrto xyz
+            for ii=1:3 % x y z
+                indxyz(iseq,ii) = str2num(temp(ii));  %#ok<ST2NM>
+                st(ii) = st(ii) + bin(ii,iseq)*indxyz(iseq,ii);
             end
         end
+        RR(idx,:)=[st st+imgsiz];
+        %SS(idx,:) = [rem(floor(idxtile/10^(level-1)),10) rem(floor(idxtile/10^(level-2)),10) rem(floor(idxtile/10^(level-3)),10)];
     end
-else
+    %% mask a region based on an given swc
+    % if 0
+    %     swcfolder = '/groups/mousebrainmicro/home/base/CODE/MATLAB/pipeline/mergeh5/sampleswcs/'
+    %     [carvedinds,H3] = carvedInds(swcfolder,RR,opt);
+    %     myfiles = myfiles(carvedinds);
+    %     RR = RR(carvedinds,:);
+    %     SS = SS(carvedinds,:);
+    % end
     %%
-    myouth5 = sprintf('%s_lev-%d_chunk-%d%d%d_%d%d%d_masked-%d.h5',opt.outname,opt.level,1,1,1,1,1,1,setmask);
-    
-    %myouth5 = sprintf('/data/lev-%d_chunk-%d%d%d_%d%d%d.h5',opt.level,ii,jj,kk,numchunk,numchunk,numchunk);
-    myouth5_parent_folder_path = fileparts(myouth5) ;
+    myh5prob =sprintf('/%s',h5_dataset_name);
+
+    %%
+    %output_file_name = sprintf('%s_lev-%d_chunk-%d%d%d_%d%d%d_masked-%d.h5',output_folder_name,level,1,1,1,1,1,1,0);
+
+    %myouth5 = sprintf('/data/lev-%d_chunk-%d%d%d_%d%d%d.h5',level,ii,jj,kk,numchunk,numchunk,numchunk);
+    myouth5_parent_folder_path = fileparts(output_file_name) ;
     if ~exist(myouth5_parent_folder_path, 'file') ,
-        mkdir(fileparts(myouth5))
+        mkdir(fileparts(output_file_name))
     end
-    if exist(myouth5, 'file') ,
-        error('Target file %s already exists', myouth5) ;
+    if exist(output_file_name, 'file') ,
+        error('Target file %s already exists', output_file_name) ;
     end
-    h5create(myouth5,myh5prob,outsiz,'Datatype','single','ChunkSize',blocksize,'Deflate',3)
-    h5create(myouth5,[myh5prob,'_props/origin'], [1 3]);
-    h5create(myouth5,[myh5prob,'_props/spacing'], [1 3]);
-    h5create(myouth5,[myh5prob,'_props/level'], [1]);
+    h5create(output_file_name,myh5prob,outsiz,'Datatype','single','ChunkSize',blocksize,'Deflate',3)
+    h5create(output_file_name,[myh5prob,'_props/origin'], [1 3]);
+    h5create(output_file_name,[myh5prob,'_props/spacing'], [1 3]);
+    h5create(output_file_name,[myh5prob,'_props/level'], 1);
     %h5create(myouth5,[myh5prob,'_props/ROI'], size(RR));
-    
-    h5create(myouth5,[myh5prob,'_props/telapsed'], size(RR,1));
-    h5write(myouth5,[myh5prob,'_props/origin'], [opt.ox opt.oy opt.oz]);
-    h5write(myouth5,[myh5prob,'_props/spacing'], [opt.sx opt.sy opt.sz]);
-    h5write(myouth5,[myh5prob,'_props/level'], [opt.nl-1]);
+
+    h5create(output_file_name,[myh5prob,'_props/telapsed'], size(RR,1));
+    h5write(output_file_name,[myh5prob,'_props/origin'], [ox oy oz]);
+    h5write(output_file_name,[myh5prob,'_props/spacing'], [sx sy sz]);
+    h5write(output_file_name,[myh5prob,'_props/level'], nl-1);
     % h5write(myouth5,[myh5prob,'_props/ROI'], RR);, only write
     % where the data is copied
     %%
@@ -255,18 +168,18 @@ else
     if isempty(idxiijjkk)
         return
     end
-    h5create(myouth5,[myh5prob,'_props/ROI'], size(RR(idxiijjkk,:)));
-    h5write(myouth5,[myh5prob,'_props/ROI'], RR(idxiijjkk,:));
+    h5create(output_file_name,[myh5prob,'_props/ROI'], size(RR(idxiijjkk,:)));
+    h5write(output_file_name,[myh5prob,'_props/ROI'], RR(idxiijjkk,:));
     % read all
-    
+
     %% parread()
     theseinds = idxiijjkk(:)';
     telapsed = zeros(1,length(theseinds));
     %Itempsub = cell(1,length(theseinds));
-    numBatch = 4*numCPU;
+    numBatch = 4*core_count_requested;
     Itempsub = cell(1,numBatch);
-    
-    iters = 0:numBatch:length(theseinds);
+
+    iters = 0:numBatch:length(theseinds) ;
     kk=length(iters)-1;
     for ii=1:kk
         %%
@@ -275,8 +188,8 @@ else
         % read in paralel
         parfor idx = 1:numBatch%length(theseinds)
             if strcmp(fileext,'.h5')
-                data = single(h5read(myfiles{iters(ii)+idx},['/',info.Datasets.Name]));
-                data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
+                data = single(h5read(myfiles{iters(ii)+idx},['/',info.Datasets.Name]));  %#ok<PFBNS>
+                data = uint8(((data+1).*(single(data>mask_threshold)/256))-1);
                 if ndims(data)>3 ,
                     original_size = size(data) ;
                     new_size = original_size(end-2:end) ;
@@ -284,8 +197,8 @@ else
                 end
             else
                 data = permute(single(deployedtiffread(myfiles{iters(ii)+idx})),[2 1 3]);
-                data = (data+1).*single(data>opt.maskThr);
-                data(~data) = opt.maskThr;
+                data = (data+1).*single(data>mask_threshold);
+                data(~data) = mask_threshold;
                 data = data/256-1;
                 data = uint8(data);
             end
@@ -300,21 +213,21 @@ else
             st = RR(iters(ii)+idx,1:3);
             data = Itempsub{idx};
             tstart = tic;
-            h5write(myouth5,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
+            h5write(output_file_name,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
             ttoc = (toc(tstart));
             telapsed(iters(ii)+idx) = ttoc;
         end
-        
+
         sprintf('block idx: %d / %d, R: %d, W: %d, maxW: %f',ii,kk,round(elapseread),...
             round(sum(telapsed(iters(ii)+1:iters(ii)+numBatch))),max(telapsed(iters(ii)+1:iters(ii)+numBatch)))
     end
-    
+
     for idx = iters(end)+1: length(theseinds)
         % write into big file
         st = RR(idx,1:3);
         if strcmp(fileext,'.h5')
             data = single(h5read(myfiles{idx},['/',info.Datasets.Name]));
-            data = uint8(((data+1).*(single(data>opt.maskThr)/256))-1);
+            data = uint8(((data+1).*(single(data>mask_threshold)/256))-1);
             if ndims(data)>3 ,
                 original_size = size(data) ;
                 new_size = original_size(end-2:end) ;
@@ -322,113 +235,32 @@ else
             end                
         else
             data = permute(single(deployedtiffread(myfiles{theseinds(idx)})),[2 1 3]);
-            data = (data+1).*single(data>opt.maskThr);
-            data(~data) = opt.maskThr;
+            data = (data+1).*single(data>mask_threshold);
+            data(~data) = mask_threshold;
             data = data/256-1;
             data = uint8(data);
         end
         tstart = tic;
-        h5write(myouth5,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
+        h5write(output_file_name,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
         ttoc = round(toc(tstart));
         telapsed(idx) = ttoc;
     end
-end
-% copy output to target location
+    % copy output to target location
 
-% delete the scratch location
+    % delete the scratch location
 
-%%
-if opt.viz
-    figure,
-    hold on
-    plotyy(1:length(telapsed),telapsed,1:length(telapsed)-1,diff(telapsed))
-    title(num2str(max(telapsed)))
-    legend('total time','iter time')
-    % load seq
-    BB = RR(:,[1 4 2 5 3 6])+1;
     %%
-end
+    if do_visualize
+        figure,
+        hold on
+        plotyy(1:length(telapsed),telapsed,1:length(telapsed)-1,diff(telapsed)) %#ok<PLOTYY>
+        title(num2str(max(telapsed)))
+        legend('total time','iter time')
+        % load seq
+        %BB = RR(:,[1 4 2 5 3 6])+1;
+        %%
+    end
 
 end  % main function
 
 
-function deployment
-% mcc -m -R -nojvm -v mergeh5_chunks.m -d /groups/mousebrainmicro/home/base/CODE/MATLAB/compiledfunctions/mergeh5_chunks_unix -a ./common
-%
-mergeh5_chunks('/groups/mousebrainmicro/home/base/CODE/MATLAB/recontree/config_files/20150619_config_mergeh5.cfg','1','1','1','8')
-
-%%
-brain = '2015-06-19';
-configfile = '/groups/mousebrainmicro/home/base/CODE/MATLAB/recontree/config_files/20161025_config_mergeh5_ch1.cfg'
-configfile = '/groups/mousebrainmicro/home/base/CODE/MATLAB/recontree/config_files/20150619_config_mergeh5.cfg'
-opt = configparser(configfile);
-if isfield(opt,'nl')
-    opt.level=opt.nl-1;
-else
-    error('No level was found')
-end
-% get sequence
-args.level = opt.level;
-args.ext = opt.ext;
-if exist(opt.seqtemp, 'file') == 2
-    % load file directly
-else
-    mkdir(fileparts(opt.seqtemp))
-    args.fid = fopen(opt.seqtemp,'w');
-    recdir(opt.inputfolder,args)
-end
-fid=fopen(opt.seqtemp,'r');
-myfiles = textscan(fid,'%s');
-myfiles = myfiles{1};
-fclose(fid);
-%%
-% mergeh5_chunks(configfile,iiC,jjC,kkC,numchunk)
-% mergeh5_chunks(configfile,'2','1','1','8')
-% outputfold = '/groups/mousebrainmicro/mousebrainmicro/cluster/Stitching/160718/Descriptors/'
-numcores = 4;
-myfile = sprintf('mergeh5chunks_%s_%s_ch0.sh',brain,date)
-compiledfunc = '/groups/mousebrainmicro/home/base/CODE/MATLAB/compiledfunctions/mergeh5_chunks/mergeh5_chunks'
-
-%find number of random characters to choose from
-s = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-numRands = length(s);
-%specify length of random string to generate
-sLength = 10;
-%-o /dev/null
-esttime = 30*60;
-
-numchunk = 8;
-[subs1 subs2 subs3] = ndgrid(1:8,1:8,1:8);
-subs = [subs3(:) subs2(:) subs1(:)];
-% if 1
-%     myfiles = dir(fullfile(matfolder,'pointmatches','*.mat'));
-%     doneinds = cellfun(@(x) str2num(x(1:5)),{myfiles.name});
-%     [finished,bb] = min(pdist2((inds+1)',doneinds(:)),[],2);finished = ~finished;
-%     % [finished,bb] = min(pdist2((inds+1)',find(cellfun(@isempty,regpts))'),[],2)
-% else
-%     finished = zeros(1,length(inds)-1);
-% %     finished(402:494) = 1;
-% %     finished = ~finished
-% end
-%%
-% mergeh5_chunks(configfile,'1','2','3','8')
-%%
-fid = fopen(myfile,'w');
-for ii=1:size(subs,1)
-    %%
-    %generate random string
-    randString = s( ceil(rand(1,sLength)*numRands) );
-    name = sprintf('mh5_%05d-%s',ii,randString);
-    outargs = sprintf('''%s %s %d %d %d %d> output.log''',compiledfunc,configfile,subs(ii,1),subs(ii,2),subs(ii,3),numchunk);
-    mysub = sprintf('qsub -pe batch %d -l d_rt=%d -N %s -j y -o ~/logs -b y -cwd -V %s\n',numcores,esttime,name,outargs);
-    % check if output files exists
-    myouth5 = sprintf('%s_lev-%d_chunk-%d%d%d_%d%d%d.h5',opt.outname,opt.level,subs(ii,1),subs(ii,2),subs(ii,3),numchunk,numchunk,numchunk);
-    if exist(myouth5,'file')
-        continue
-    else
-        fwrite(fid,mysub);
-    end
-end
-unix(sprintf('chmod +x %s',myfile));
-
-end
