@@ -1,4 +1,4 @@
-function mergeh5_chunks(configuration_file_name)
+function mergeh5_chunks(sample_date, mask_threshold)
     %MERGEH5 Creates multiple h5 files from multiple small tif/h5s. For tifs,
     %provide parent folder in octree, for h5s provide envelop folder. Output is
     %8 bit so make sure that threshold and parameters are set properly.
@@ -19,22 +19,15 @@ function mergeh5_chunks(configuration_file_name)
     % Copyright: HHMI 2016
 
     % Read the configuration file, break out the things in it
-    opt = configparser(configuration_file_name);
-    input_folder_path = opt.input_folder_path ;
-    %nl = opt.nl ;
-    if isfield(opt,'numCPU')
-        core_count_requested = opt.numCPU;
-    else
-        core_count_requested = feature('numcores');
-    end
-    output_folder_path = opt.output_folder_path ;
-    sample_date = opt.sample_date ;
+    %opt = configparser(configuration_file_name);
+    input_folder_path = sprintf('/nrs/mouselight/SAMPLES/%s-prob', sample_date) ;
+    core_count_requested = feature('numcores');
+    output_folder_path = sprintf('/nrs/mouselight/cluster/classifierOutputs/%s-group-writable/whole-brain-p-map-as-h5', sample_date) 
     output_file_name = fullfile(output_folder_path, sprintf('%s-whole-brain-p-map.h5', sample_date)) ;
     input_file_names_list_file_path = fullfile(output_folder_path, sprintf('%s-input-file-paths-cache.txt', sample_date)) ;
-    h5_dataset_name = opt.h5channel ;
-    input_file_name_ending = opt.ext ;
-    mask_threshold = opt.maskThr ;
-    do_visualize = opt.viz ;
+    h5_dataset_name = 'prob0' ;
+    input_file_name_ending = '0.h5' ;
+    do_visualize = false ;
 
     % inputfolder = '/nrs/mouselight/Users/mluser/2018-05-23-prob'
     % # output h5 name
