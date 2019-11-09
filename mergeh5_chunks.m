@@ -22,13 +22,18 @@ function mergeh5_chunks(sample_date, mask_threshold)
     %opt = configparser(configuration_file_name);
     input_folder_path = sprintf('/nrs/mouselight/SAMPLES/%s-prob', sample_date) ;
     core_count_requested = feature('numcores');
-    output_folder_path = sprintf('/nrs/mouselight/cluster/classifierOutputs/%s-group-writable/whole-brain-p-map-as-h5', sample_date) 
-    output_file_name = fullfile(output_folder_path, sprintf('%s-whole-brain-p-map.h5', sample_date)) ;
-    input_file_names_list_file_path = fullfile(output_folder_path, sprintf('%s-input-file-paths-cache.txt', sample_date)) ;
+    nrs_folder_for_this_sample = sprintf('/groups/mousebrainmicro/mousebrainmicro/cluster/Reconstructions/%s', sample_date) ;
+    output_folder_path = fullfile(nrs_folder_for_this_sample, 'whole-brain-p-map-as-h5') ;
+    output_file_path = fullfile(output_folder_path, sprintf('whole-brain-p-map.h5')) ;
+    input_file_names_list_file_path = fullfile(output_folder_path, sprintf('input-file-paths-cache.txt')) ;
     h5_dataset_name = 'prob0' ;
     input_file_name_ending = '0.h5' ;
     do_visualize = false ;
 
+    if ~exist(output_folder_path, 'file') ,
+        mkdir(output_folder_path) ;
+    end
+    
     % inputfolder = '/nrs/mouselight/Users/mluser/2018-05-23-prob'
     % # output h5 name
     % outname = '/scratch/classifierOutputs/2018-04-13/20180413_prob0/20180413_prob0'
@@ -83,9 +88,6 @@ function mergeh5_chunks(sample_date, mask_threshold)
     outsiz = imgsiz*2^(level);
 
     
-    if ~exist(output_folder_path, 'file') ,
-        mkdir(output_folder_path) ;
-    end
     
     %%
     % get sequence
@@ -143,19 +145,19 @@ function mergeh5_chunks(sample_date, mask_threshold)
     %output_file_name = sprintf('%s_lev-%d_chunk-%d%d%d_%d%d%d_masked-%d.h5',output_folder_name,level,1,1,1,1,1,1,0);
 
     %myouth5 = sprintf('/data/lev-%d_chunk-%d%d%d_%d%d%d.h5',level,ii,jj,kk,numchunk,numchunk,numchunk);
-    if exist(output_file_name, 'file') ,
-        error('Target file %s already exists', output_file_name) ;
+    if exist(output_file_path, 'file') ,
+        error('Target file %s already exists', output_file_path) ;
     end
-    h5create(output_file_name,myh5prob,outsiz,'Datatype','single','ChunkSize',blocksize,'Deflate',3)
-    h5create(output_file_name,[myh5prob,'_props/origin'], [1 3]);
-    h5create(output_file_name,[myh5prob,'_props/spacing'], [1 3]);
-    h5create(output_file_name,[myh5prob,'_props/level'], 1);
+    h5create(output_file_path,myh5prob,outsiz,'Datatype','single','ChunkSize',blocksize,'Deflate',3)
+    h5create(output_file_path,[myh5prob,'_props/origin'], [1 3]);
+    h5create(output_file_path,[myh5prob,'_props/spacing'], [1 3]);
+    h5create(output_file_path,[myh5prob,'_props/level'], 1);
     %h5create(myouth5,[myh5prob,'_props/ROI'], size(RR));
 
-    h5create(output_file_name,[myh5prob,'_props/telapsed'], size(RR,1));
-    h5write(output_file_name,[myh5prob,'_props/origin'], [ox oy oz]);
-    h5write(output_file_name,[myh5prob,'_props/spacing'], [sx sy sz]);
-    h5write(output_file_name,[myh5prob,'_props/level'], nl-1);
+    h5create(output_file_path,[myh5prob,'_props/telapsed'], size(RR,1));
+    h5write(output_file_path,[myh5prob,'_props/origin'], [ox oy oz]);
+    h5write(output_file_path,[myh5prob,'_props/spacing'], [sx sy sz]);
+    h5write(output_file_path,[myh5prob,'_props/level'], nl-1);
     % h5write(myouth5,[myh5prob,'_props/ROI'], RR);, only write
     % where the data is copied
     %%
@@ -164,8 +166,8 @@ function mergeh5_chunks(sample_date, mask_threshold)
     if isempty(idxiijjkk)
         return
     end
-    h5create(output_file_name,[myh5prob,'_props/ROI'], size(RR(idxiijjkk,:)));
-    h5write(output_file_name,[myh5prob,'_props/ROI'], RR(idxiijjkk,:));
+    h5create(output_file_path,[myh5prob,'_props/ROI'], size(RR(idxiijjkk,:)));
+    h5write(output_file_path,[myh5prob,'_props/ROI'], RR(idxiijjkk,:));
     % read all
 
     %% parread()
@@ -209,7 +211,7 @@ function mergeh5_chunks(sample_date, mask_threshold)
             st = RR(iters(ii)+idx,1:3);
             data = Itempsub{idx};
             tstart = tic;
-            h5write(output_file_name,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
+            h5write(output_file_path,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
             ttoc = (toc(tstart));
             telapsed(iters(ii)+idx) = ttoc;
         end
@@ -237,13 +239,17 @@ function mergeh5_chunks(sample_date, mask_threshold)
             data = uint8(data);
         end
         tstart = tic;
-        h5write(output_file_name,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
+        h5write(output_file_path,myh5prob,data,st+[1 1 1],size(data),[1 1 1])
         ttoc = round(toc(tstart));
         telapsed(idx) = ttoc;
     end
     % copy output to target location
 
     % delete the scratch location
+    
+    % Create link for Will Patton
+    link_path = fullfile(nrs_folder_for_this_sample, 'whole-brain-p-map.h5') ;
+    system(sprintf('ln -s %s %s', output_file_path, link_path)) ;
 
     %%
     if do_visualize
