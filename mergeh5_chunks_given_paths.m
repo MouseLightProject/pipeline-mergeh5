@@ -246,9 +246,9 @@ function mergeh5_chunks_given_paths(output_folder_path, input_folder_path, mask_
 
     % delete the scratch location
     
-    % Create link for Will Patton
-    link_path = fullfile(nrs_folder_for_this_sample, 'whole-brain-p-map.h5') ;
-    system(sprintf('ln -s %s %s', output_file_path, link_path)) ;
+%     % Create link for Will Patton
+%     link_path = fullfile(nrs_folder_for_this_sample, 'whole-brain-p-map.h5') ;
+%     system(sprintf('ln -s %s %s', output_file_path, link_path)) ;
 
     %%
     if do_visualize
