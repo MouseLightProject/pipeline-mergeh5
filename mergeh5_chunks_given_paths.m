@@ -1,4 +1,4 @@
-function mergeh5_chunks_given_paths(output_folder_path, input_folder_path, mask_threshold)
+function mergeh5_chunks_given_paths(output_folder_path, input_folder_path, foreground_channel_index, mask_threshold)
     %MERGEH5 Creates multiple h5 files from multiple small tif/h5s. For tifs,
     %provide parent folder in octree, for h5s provide envelop folder. Output is
     %8 bit so make sure that threshold and parameters are set properly.
@@ -26,7 +26,7 @@ function mergeh5_chunks_given_paths(output_folder_path, input_folder_path, mask_
     output_file_path = fullfile(output_folder_path, 'whole-brain-p-map.h5') ;
     input_file_names_list_file_path = fullfile(output_folder_path, sprintf('input-file-paths-cache.txt')) ;
     h5_dataset_name = 'prob0' ;
-    input_file_name_ending = '0.h5' ;
+    input_file_name_ending = sprintf('%d.h5', foreground_channel_index) ;
     do_visualize = false ;
 
     if ~exist(output_folder_path, 'file') ,
@@ -66,14 +66,14 @@ function mergeh5_chunks_given_paths(output_folder_path, input_folder_path, mask_
     [~,~,fileext] = fileparts(input_file_name_ending);
     % leaf image stack size
     if strcmp(fileext,'.h5')
-        myh5 = dir(fullfile(input_folder_path,'*.h5'));
+        myh5 = dir(fullfile(input_folder_path,['*' input_file_name_ending])) ;
         info = h5info(fullfile(input_folder_path,myh5(1).name));
         chunk_size_ijk = info.Datasets.Dataspace.Size;
         if length(chunk_size_ijk)>3 ,
             chunk_size_ijk = chunk_size_ijk(end-2:end) ;  
         end
     else
-        mytif = dir(fullfile(input_folder_path,'default.0.tif'));
+        mytif = dir(fullfile(input_folder_path,['default' input_file_name_ending])) ;
         info = imfinfo(fullfile(input_folder_path,mytif(1).name), 'tif');
         chunk_size_ijk = double([info(1).Width info(1).Height length(info)]);
     end
@@ -180,10 +180,10 @@ function mergeh5_chunks_given_paths(output_folder_path, input_folder_path, mask_
     kk=length(iters)-1;
     for ii=1:kk
         %%
-        sprintf('%d out of %d',ii,kk)
+        fprintf('%d out of %d\n',ii,kk)
         ticparread = tic;
         % read in paralel
-        parfor idx = 1:numBatch%length(theseinds)
+        parfor idx = 1:numBatch ,
             if strcmp(fileext,'.h5')
                 data = single(h5read(laden_chunk_file_paths{iters(ii)+idx},['/',info.Datasets.Name]));  %#ok<PFBNS>
                 data = uint8(((data+1).*(single(data>mask_threshold)/256))-1);
@@ -215,7 +215,7 @@ function mergeh5_chunks_given_paths(output_folder_path, input_folder_path, mask_
             telapsed(iters(ii)+idx) = ttoc;
         end
 
-        sprintf('block idx: %d / %d, R: %d, W: %d, maxW: %f',ii,kk,round(elapseread),...
+        fprintf('block idx: %d / %d, R: %d, W: %d, maxW: %f\n',ii,kk,round(elapseread),...
             round(sum(telapsed(iters(ii)+1:iters(ii)+numBatch))),max(telapsed(iters(ii)+1:iters(ii)+numBatch)))
     end
 
